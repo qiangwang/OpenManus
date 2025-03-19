@@ -9,6 +9,7 @@ from app.tool.browser_use_tool import BrowserUseTool
 from app.tool.file_saver import FileSaver
 from app.tool.python_execute import PythonExecute
 from app.tool.web_search import WebSearch
+from app.tool.user_input import UserInput
 
 
 class Manus(ToolCallAgent):
@@ -28,13 +29,13 @@ class Manus(ToolCallAgent):
     system_prompt: str = SYSTEM_PROMPT
     next_step_prompt: str = NEXT_STEP_PROMPT
 
-    max_observe: int = 2000
+    max_observe: int = 5000
     max_steps: int = 20
 
     # Add general-purpose tools to the tool collection
     available_tools: ToolCollection = Field(
         default_factory=lambda: ToolCollection(
-            PythonExecute(), WebSearch(), BrowserUseTool(), FileSaver(), Terminate()
+            UserInput(), PythonExecute(), WebSearch(), BrowserUseTool(), FileSaver(), Terminate()
         )
     )
 

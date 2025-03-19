@@ -183,6 +183,9 @@ class BrowserUseTool(BaseTool):
             try:
                 context = await self._ensure_browser_initialized()
 
+                if url:
+                    await context.navigate_to(url)
+
                 if action == "navigate":
                     if not url:
                         return ToolResult(error="URL is required for 'navigate' action")

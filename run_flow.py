@@ -6,10 +6,13 @@ from app.flow.base import FlowType
 from app.flow.flow_factory import FlowFactory
 from app.logger import logger
 
+async def while_run_flow():
+    while True:
+        await run_flow()
 
 async def run_flow():
     agents = {
-        "manus": Manus(),
+        "manus": Manus,
     }
 
     try:
@@ -33,7 +36,7 @@ async def run_flow():
             )
             elapsed_time = time.time() - start_time
             logger.info(f"Request processed in {elapsed_time:.2f} seconds")
-            logger.info(result)
+            #logger.info(result)
         except asyncio.TimeoutError:
             logger.error("Request processing timed out after 1 hour")
             logger.info(
@@ -47,4 +50,4 @@ async def run_flow():
 
 
 if __name__ == "__main__":
-    asyncio.run(run_flow())
+    asyncio.run(while_run_flow())

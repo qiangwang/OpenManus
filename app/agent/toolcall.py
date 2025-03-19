@@ -128,7 +128,7 @@ class ToolCallAgent(ReActAgent):
             # Return last message content if no tool calls
             return self.messages[-1].content or "No content or commands to execute"
 
-        results = []
+        result = ''
         for command in self.tool_calls:
             result = await self.execute_tool(command)
 
@@ -136,7 +136,7 @@ class ToolCallAgent(ReActAgent):
                 result = result[: self.max_observe]
 
             logger.info(
-                f"🎯 Tool '{command.function.name}' completed its mission! Result: {result}"
+                f"🎯 Tool '{command.function.name}' result: {result}"
             )
 
             # Add tool response to memory
@@ -144,9 +144,8 @@ class ToolCallAgent(ReActAgent):
                 content=result, tool_call_id=command.id, name=command.function.name
             )
             self.memory.add_message(tool_msg)
-            results.append(result)
 
-        return "\n\n".join(results)
+        return result
 
     async def execute_tool(self, command: ToolCall) -> str:
         """Execute a single tool call with robust error handling"""
@@ -162,15 +161,11 @@ class ToolCallAgent(ReActAgent):
             args = json.loads(command.function.arguments or "{}")
 
             # Execute the tool
-            logger.info(f"🔧 Activating tool: '{name}'...")
+            logger.info(f"🔧 Activating tool: '{name}' {args} ...")
             result = await self.available_tools.execute(name=name, tool_input=args)
 
             # Format result for display
-            observation = (
-                f"Observed output of cmd `{name}` executed:\n{str(result)}"
-                if result
-                else f"Cmd `{name}` completed with no output"
-            )
+            observation = str(result) if result else '执行完成但没有结果'
 
             # Handle special tools like `finish`
             await self._handle_special_tool(name=name, result=result)

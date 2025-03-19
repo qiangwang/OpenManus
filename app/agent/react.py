@@ -34,5 +34,6 @@ class ReActAgent(BaseAgent, ABC):
         """Execute a single step: think and act."""
         should_act = await self.think()
         if not should_act:
-            return "Thinking complete - no action needed"
+            self.state = AgentState.FINISHED
+            return self.memory.messages[-1].content
         return await self.act()

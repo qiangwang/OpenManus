@@ -1,6 +1,6 @@
 import json
 import time
-from typing import Dict, List, Optional, Union
+from typing import Dict, List, Optional, Union, Type
 
 from pydantic import Field
 
@@ -10,6 +10,7 @@ from app.llm import LLM
 from app.logger import logger
 from app.schema import AgentState, Message, ToolChoice
 from app.tool import PlanningTool
+from app.prompt.flow import *
 
 
 class PlanningFlow(BaseFlow):
@@ -22,7 +23,7 @@ class PlanningFlow(BaseFlow):
     current_step_index: Optional[int] = None
 
     def __init__(
-        self, agents: Union[BaseAgent, List[BaseAgent], Dict[str, BaseAgent]], **data
+        self, agents: Dict[str, Type[BaseAgent]], **data
     ):
         # Set executor keys before super().__init__
         if "executors" in data:
@@ -51,12 +52,12 @@ class PlanningFlow(BaseFlow):
         """
         # If step type is provided and matches an agent key, use that agent
         if step_type and step_type in self.agents:
-            return self.agents[step_type]
+            return self.get_agent(step_type)
 
         # Otherwise use the first available executor or fall back to primary agent
         for key in self.executor_keys:
             if key in self.agents:
-                return self.agents[key]
+                return self.get_agent(key)
 
         # Fallback to primary agent
         return self.primary_agent
@@ -67,9 +68,16 @@ class PlanningFlow(BaseFlow):
             if not self.primary_agent:
                 raise ValueError("No primary agent available")
 
+            if not input_text:
+                raise ValueError("prompt required")
+
+            has_plan = await self._create_initial_plan(input_text)
+            if not has_plan:
+                return "done"
+
             # Create initial plan if input provided
             if input_text:
-                await self._create_initial_plan(input_text)
+
 
                 # Verify plan was created successfully
                 if self.active_plan_id not in self.planning_tool.plans:
@@ -78,46 +86,44 @@ class PlanningFlow(BaseFlow):
                     )
                     return f"Failed to create plan for: {input_text}"
 
-            result = ""
+            all_result = ""
             while True:
                 # Get current step to execute
                 self.current_step_index, step_info = await self._get_current_step_info()
 
                 # Exit if no more steps or plan completed
                 if self.current_step_index is None:
-                    result += await self._finalize_plan()
+                    #result += await self._finalize_plan()
+                    all_result += 'done'
                     break
 
                 # Execute current step with appropriate agent
                 step_type = step_info.get("type") if step_info else None
+                # 每个步骤clone个新的agent
                 executor = self.get_executor(step_type)
-                step_result = await self._execute_step(executor, step_info)
-                result += step_result + "\n"
+                logger.info(f"开始 {step_info.get('text')}, executor:{executor.name}")
+                step_result = await self._execute_step(executor, step_info, all_result)
+                logger.info(f"完成 {step_info.get('text')}, result:{step_result}")
+                all_result += f"“{step_info.get('text')}”的结果是“{step_result}”\n"
 
                 # Check if agent wants to terminate
                 if hasattr(executor, "state") and executor.state == AgentState.FINISHED:
                     break
 
-            return result
+            return all_result
         except Exception as e:
             logger.error(f"Error in PlanningFlow: {str(e)}")
             return f"Execution failed: {str(e)}"
 
-    async def _create_initial_plan(self, request: str) -> None:
+    async def _create_initial_plan(self, request: str) -> bool:
         """Create an initial plan based on the request using the flow's LLM and PlanningTool."""
         logger.info(f"Creating initial plan with ID: {self.active_plan_id}")
 
         # Create a system message for plan creation
-        system_message = Message.system_message(
-            "You are a planning assistant. Create a concise, actionable plan with clear steps. "
-            "Focus on key milestones rather than detailed sub-steps. "
-            "Optimize for clarity and efficiency."
-        )
+        system_message = Message.system_message(SYSTEM_PROMPT)
 
         # Create a user message with the request
-        user_message = Message.user_message(
-            f"Create a reasonable plan with clear steps to accomplish the task: {request}"
-        )
+        user_message = Message.user_message(request)
 
         # Call LLM with PlanningTool
         response = await self.llm.ask_tool(
@@ -127,40 +133,32 @@ class PlanningFlow(BaseFlow):
             tool_choice=ToolChoice.AUTO,
         )
 
-        # Process tool calls if present
-        if response.tool_calls:
-            for tool_call in response.tool_calls:
-                if tool_call.function.name == "planning":
-                    # Parse the arguments
-                    args = tool_call.function.arguments
-                    if isinstance(args, str):
-                        try:
-                            args = json.loads(args)
-                        except json.JSONDecodeError:
-                            logger.error(f"Failed to parse tool arguments: {args}")
-                            continue
+        logger.info(f"llm message: {response.content}")
 
-                    # Ensure plan_id is set correctly and execute the tool
-                    args["plan_id"] = self.active_plan_id
+        if not response.tool_calls:
+            return False
 
-                    # Execute the tool via ToolCollection instead of directly
-                    result = await self.planning_tool.execute(**args)
+        for tool_call in response.tool_calls:
+            if tool_call.function.name == "planning":
+                # Parse the arguments
+                args = tool_call.function.arguments
+                if isinstance(args, str):
+                    try:
+                        args = json.loads(args)
+                    except json.JSONDecodeError:
+                        logger.error(f"Failed to parse tool arguments: {args}")
+                        continue
 
-                    logger.info(f"Plan creation result: {str(result)}")
-                    return
+                # Ensure plan_id is set correctly and execute the tool
+                args["plan_id"] = self.active_plan_id
 
-        # If execution reached here, create a default plan
-        logger.warning("Creating default plan")
+                # Execute the tool via ToolCollection instead of directly
+                result = await self.planning_tool.execute(**args)
 
-        # Create default plan using the ToolCollection
-        await self.planning_tool.execute(
-            **{
-                "command": "create",
-                "plan_id": self.active_plan_id,
-                "title": f"Plan for: {request[:50]}{'...' if len(request) > 50 else ''}",
-                "steps": ["Analyze request", "Execute task", "Verify results"],
-            }
-        )
+                logger.info(f"Plan creation result: {str(result)}")
+                return True
+
+        return False
 
     async def _get_current_step_info(self) -> tuple[Optional[int], Optional[dict]]:
         """
@@ -226,22 +224,12 @@ class PlanningFlow(BaseFlow):
             logger.warning(f"Error finding current step index: {e}")
             return None, None
 
-    async def _execute_step(self, executor: BaseAgent, step_info: dict) -> str:
+    async def _execute_step(self, executor: BaseAgent, step_info: dict, all_result: str) -> str:
         """Execute the current step with the specified agent using agent.run()."""
-        # Prepare context for the agent with current plan status
-        plan_status = await self._get_plan_text()
-        step_text = step_info.get("text", f"Step {self.current_step_index}")
+        step_text = step_info.get("text")
 
         # Create a prompt for the agent to execute the current step
-        step_prompt = f"""
-        CURRENT PLAN STATUS:
-        {plan_status}
-
-        YOUR CURRENT TASK:
-        You are now working on step {self.current_step_index}: "{step_text}"
-
-        Please execute this step using the appropriate tools. When you're done, provide a summary of what you accomplished.
-        """
+        step_prompt = NEXT_STEP_PROMPT % (all_result, step_text)
 
         # Use agent.run() to execute the step
         try:

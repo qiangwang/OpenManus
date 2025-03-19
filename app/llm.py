@@ -265,7 +265,7 @@ class LLM:
                 # Non-streaming request
                 params["stream"] = False
 
-                response = await self.client.chat.completions.create(**params)
+                response = await self.chat(**params)
 
                 if not response.choices or not response.choices[0].message.content:
                     raise ValueError("Empty or invalid response from LLM")
@@ -279,7 +279,7 @@ class LLM:
             self.update_token_count(input_tokens)
 
             params["stream"] = True
-            response = await self.client.chat.completions.create(**params)
+            response = await self.chat(**params)
 
             collected_messages = []
             async for chunk in response:
@@ -404,7 +404,7 @@ class LLM:
                     temperature if temperature is not None else self.temperature
                 )
 
-            response = await self.client.chat.completions.create(**params)
+            response = await self.chat(**params)
 
             # Check if response is valid
             if not response.choices or not response.choices[0].message:
@@ -434,3 +434,8 @@ class LLM:
         except Exception as e:
             logger.error(f"Unexpected error in ask_tool: {e}")
             raise
+
+    async def chat(self, **params):
+        response = await self.client.chat.completions.create(**params)
+        logger.info('chat,params:%s,llm_response:%s' % (params, response))
+        return response

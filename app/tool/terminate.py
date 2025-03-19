@@ -11,15 +11,14 @@ class Terminate(BaseTool):
     parameters: dict = {
         "type": "object",
         "properties": {
-            "status": {
+            "result": {
                 "type": "string",
-                "description": "The finish status of the interaction.",
-                "enum": ["success", "failure"],
+                "description": "任务目标对应的结果信息",
             }
         },
-        "required": ["status"],
+        "required": ["result"],
     }
 
-    async def execute(self, status: str) -> str:
+    async def execute(self, result: str) -> str:
         """Finish the current execution"""
-        return f"The interaction has been completed with status: {status}"
+        return result
