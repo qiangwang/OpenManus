@@ -1,4 +1,5 @@
 from app.tool.base import BaseTool
+import time
 
 class UserInput(BaseTool):
     name: str = "user_input"
@@ -15,4 +16,5 @@ class UserInput(BaseTool):
     }
 
     async def execute(self, question: str) -> str:
+        time.sleep(3)
         return input("问题：%s\n请回答: " % question)

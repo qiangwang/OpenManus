@@ -102,6 +102,7 @@ class PlanningFlow(BaseFlow):
                 logger.info(f"开始 {step_info.get('text')}")
                 step_result = await self._execute_step(executor, step_info, all_step_result)
                 logger.info(f"完成 {step_info.get('text')}, result:\n{step_result}")
+                logger.info("Plan Status:\n%s" % await self._get_plan_text())
                 all_step_result += f"{step_info.get('text')}\n{step_result}\n"
 
                 # Check if agent wants to terminate
