@@ -1,3 +1,4 @@
+import json
 from typing import Dict, List, Optional, Union
 
 import tiktoken
@@ -9,6 +10,8 @@ from openai import (
     OpenAIError,
     RateLimitError,
 )
+from openai.types.chat import ChatCompletionMessage, ChatCompletionMessageToolCall
+from openai.types.chat.chat_completion_message_tool_call import Function
 from tenacity import (
     retry,
     retry_if_exception_type,
@@ -273,7 +276,9 @@ class LLM:
                 # Update token counts
                 self.update_token_count(response.usage.prompt_tokens)
 
+                self.print_response('ask', params, response.choices[0].message.content)
                 return response.choices[0].message.content
+
 
             # Streaming request, For streaming, update estimated token count before making the request
             self.update_token_count(input_tokens)
@@ -283,15 +288,17 @@ class LLM:
 
             collected_messages = []
             async for chunk in response:
-                chunk_message = chunk.choices[0].delta.content or ""
-                collected_messages.append(chunk_message)
-                print(chunk_message, end="", flush=True)
+                if chunk.choices[0].delta.content is not None:
+                    content = chunk.choices[0].delta.content
+                    collected_messages.append(content)
+                    print(content, end='', flush=True)
 
             print()  # Newline after streaming
             full_response = "".join(collected_messages).strip()
             if not full_response:
                 raise ValueError("Empty response from streaming LLM")
 
+            self.print_response('ask', params, full_response)
             return full_response
 
         except TokenLimitExceeded:
@@ -393,6 +400,7 @@ class LLM:
                 "tools": tools,
                 "tool_choice": tool_choice,
                 "timeout": timeout,
+                'stream': True,
                 **kwargs,
             }
 
@@ -406,15 +414,38 @@ class LLM:
 
             response = await self.chat(**params)
 
-            # Check if response is valid
-            if not response.choices or not response.choices[0].message:
-                print(response)
-                raise ValueError("Invalid or empty response from LLM")
+            if params['stream']:
+                final_contents = []
+                final_tool_calls = {}
+                async for chunk in response:
+                    if chunk.choices[0].delta.content is not None:
+                        final_contents.append(chunk.choices[0].delta.content)
+                        print(chunk.choices[0].delta.content, end='', flush=True)
 
-            # Update token counts
-            self.update_token_count(response.usage.prompt_tokens)
+                    for tool_call in chunk.choices[0].delta.tool_calls or []:
+                        index = tool_call.index
 
-            return response.choices[0].message
+                        if index not in final_tool_calls:
+                            final_tool_calls[index] = ChatCompletionMessageToolCall(id=tool_call.id, function=Function(arguments=tool_call.function.arguments, name=tool_call.function.name), type=tool_call.type)
+                            continue
+
+                        if tool_call.function.arguments is not None:
+                            final_tool_calls[index].function.arguments += tool_call.function.arguments
+
+                content = "".join(final_contents).strip()
+                tool_calls = list(final_tool_calls.values())
+                self.print_response('ask_tool', params, content, tool_calls=tool_calls)
+                return ChatCompletionMessage(content=content, tool_calls=tool_calls, role='assistant')
+            else:
+                # Check if response is valid
+                if not response.choices or not response.choices[0].message:
+                    print(response)
+                    raise ValueError("Invalid or empty response from LLM")
+
+                # Update token counts
+                self.update_token_count(response.usage.prompt_tokens)
+                self.print_response('ask_tool', params, response.choices[0].message.content, tool_calls=response.choices[0].message.tool_calls)
+                return response.choices[0].message
 
         except TokenLimitExceeded:
             # Re-raise token limit errors without logging
@@ -436,6 +467,10 @@ class LLM:
             raise
 
     async def chat(self, **params):
-        response = await self.client.chat.completions.create(**params)
-        logger.info('chat,params:%s,llm_response:%s' % (params, response))
-        return response
+        return await self.client.chat.completions.create(**params)
+
+    def print_response(self, method, params, content, tool_calls:List[ChatCompletionMessageToolCall]=None):
+        tool_call_dicts = []
+        for tool_call in tool_calls:
+            tool_call_dicts.append(tool_call.to_dict())
+        logger.info('%s:\n%s' % (method, json.dumps({'params': params, 'content': content, 'tool_calls': tool_call_dicts})))

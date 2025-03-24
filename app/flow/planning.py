@@ -86,31 +86,29 @@ class PlanningFlow(BaseFlow):
                     )
                     return f"Failed to create plan for: {input_text}"
 
-            all_result = ""
+            all_step_result = ''
             while True:
                 # Get current step to execute
                 self.current_step_index, step_info = await self._get_current_step_info()
 
                 # Exit if no more steps or plan completed
                 if self.current_step_index is None:
-                    #result += await self._finalize_plan()
-                    all_result += 'done'
                     break
 
                 # Execute current step with appropriate agent
                 step_type = step_info.get("type") if step_info else None
                 # 每个步骤clone个新的agent
                 executor = self.get_executor(step_type)
-                logger.info(f"开始 {step_info.get('text')}, executor:{executor.name}")
-                step_result = await self._execute_step(executor, step_info, all_result)
-                logger.info(f"完成 {step_info.get('text')}, result:{step_result}")
-                all_result += f"“{step_info.get('text')}”的结果是“{step_result}”\n"
+                logger.info(f"开始 {step_info.get('text')}")
+                step_result = await self._execute_step(executor, step_info, all_step_result)
+                logger.info(f"完成 {step_info.get('text')}, result:\n{step_result}")
+                all_step_result += f"{step_info.get('text')}\n{step_result}\n"
 
                 # Check if agent wants to terminate
                 if hasattr(executor, "state") and executor.state == AgentState.FINISHED:
                     break
 
-            return all_result
+            return await self._finalize_plan(all_step_result)
         except Exception as e:
             logger.error(f"Error in PlanningFlow: {str(e)}")
             return f"Execution failed: {str(e)}"
@@ -343,19 +341,15 @@ class PlanningFlow(BaseFlow):
             logger.error(f"Error generating plan text from storage: {e}")
             return f"Error: Unable to retrieve plan with ID {self.active_plan_id}"
 
-    async def _finalize_plan(self) -> str:
+    async def _finalize_plan(self, all_step_result) -> str:
         """Finalize the plan and provide a summary using the flow's LLM directly."""
         plan_text = await self._get_plan_text()
 
         # Create a summary using the flow's LLM directly
         try:
-            system_message = Message.system_message(
-                "You are a planning assistant. Your task is to summarize the completed plan."
-            )
+            system_message = Message.system_message(FINALIZE_SYSTEM_PROMPT)
 
-            user_message = Message.user_message(
-                f"The plan has been completed. Here is the final plan status:\n\n{plan_text}\n\nPlease provide a summary of what was accomplished and any final thoughts."
-            )
+            user_message = Message.user_message(FINALIZE_USER_PROMPT % all_step_result)
 
             response = await self.llm.ask(
                 messages=[user_message], system_msgs=[system_message]

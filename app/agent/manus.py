@@ -4,6 +4,7 @@ from pydantic import Field
 
 from app.agent.toolcall import ToolCallAgent
 from app.prompt.manus import NEXT_STEP_PROMPT, SYSTEM_PROMPT
+from app.schema import ToolChoice, TOOL_CHOICE_TYPE
 from app.tool import Terminate, ToolCollection
 from app.tool.browser_use_tool import BrowserUseTool
 from app.tool.file_saver import FileSaver
@@ -29,10 +30,11 @@ class Manus(ToolCallAgent):
     system_prompt: str = SYSTEM_PROMPT
     next_step_prompt: str = NEXT_STEP_PROMPT
 
-    max_observe: int = 5000
+    max_observe: int = 50000
     max_steps: int = 20
 
     # Add general-purpose tools to the tool collection
+    tool_choices: TOOL_CHOICE_TYPE = ToolChoice.REQUIRED
     available_tools: ToolCollection = Field(
         default_factory=lambda: ToolCollection(
             UserInput(), PythonExecute(), WebSearch(), BrowserUseTool(), FileSaver(), Terminate()

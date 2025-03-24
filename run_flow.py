@@ -36,7 +36,7 @@ async def run_flow():
             )
             elapsed_time = time.time() - start_time
             logger.info(f"Request processed in {elapsed_time:.2f} seconds")
-            #logger.info(result)
+            logger.info(result)
         except asyncio.TimeoutError:
             logger.error("Request processing timed out after 1 hour")
             logger.info(

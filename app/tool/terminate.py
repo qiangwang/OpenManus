@@ -13,7 +13,7 @@ class Terminate(BaseTool):
         "properties": {
             "result": {
                 "type": "string",
-                "description": "任务目标对应的结果信息",
+                "description": "key result of the tasks",
             }
         },
         "required": ["result"],

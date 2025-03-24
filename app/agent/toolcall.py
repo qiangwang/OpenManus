@@ -80,54 +80,20 @@ class ToolCallAgent(ReActAgent):
                 f"🧰 Tools being prepared: {[call.function.name for call in response.tool_calls]}"
             )
 
-        try:
-            # Handle different tool_choices modes
-            if self.tool_choices == ToolChoice.NONE:
-                if response.tool_calls:
-                    logger.warning(
-                        f"🤔 Hmm, {self.name} tried to use tools when they weren't available!"
-                    )
-                if response.content:
-                    self.memory.add_message(Message.assistant_message(response.content))
-                    return True
-                return False
-
-            # Create and add assistant message
-            assistant_msg = (
-                Message.from_tool_calls(
-                    content=response.content, tool_calls=self.tool_calls
-                )
-                if self.tool_calls
-                else Message.assistant_message(response.content)
+        # Create and add assistant message
+        assistant_msg = (
+            Message.from_tool_calls(
+                content=response.content, tool_calls=self.tool_calls
             )
-            self.memory.add_message(assistant_msg)
+            if self.tool_calls
+            else Message.assistant_message(response.content)
+        )
+        self.memory.add_message(assistant_msg)
 
-            if self.tool_choices == ToolChoice.REQUIRED and not self.tool_calls:
-                return True  # Will be handled in act()
-
-            # For 'auto' mode, continue with content if no commands but content exists
-            if self.tool_choices == ToolChoice.AUTO and not self.tool_calls:
-                return bool(response.content)
-
-            return bool(self.tool_calls)
-        except Exception as e:
-            logger.error(f"🚨 Oops! The {self.name}'s thinking process hit a snag: {e}")
-            self.memory.add_message(
-                Message.assistant_message(
-                    f"Error encountered while processing: {str(e)}"
-                )
-            )
-            return False
+        return bool(self.tool_calls)
 
     async def act(self) -> str:
         """Execute tool calls and handle their results"""
-        if not self.tool_calls:
-            if self.tool_choices == ToolChoice.REQUIRED:
-                raise ValueError(TOOL_CALL_REQUIRED)
-
-            # Return last message content if no tool calls
-            return self.messages[-1].content or "No content or commands to execute"
-
         result = ''
         for command in self.tool_calls:
             result = await self.execute_tool(command)
@@ -136,7 +102,7 @@ class ToolCallAgent(ReActAgent):
                 result = result[: self.max_observe]
 
             logger.info(
-                f"🎯 Tool '{command.function.name}' result: {result}"
+                f"🎯 Tool '{command.function.name}' result:\n{result}"
             )
 
             # Add tool response to memory

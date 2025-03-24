@@ -35,5 +35,5 @@ class ReActAgent(BaseAgent, ABC):
         should_act = await self.think()
         if not should_act:
             self.state = AgentState.FINISHED
-            return self.memory.messages[-1].content
+            return self.messages[-1].content or "No content or commands to execute"
         return await self.act()
