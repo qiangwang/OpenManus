@@ -2,7 +2,8 @@ from app.tool.base import BaseTool
 
 
 _TERMINATE_DESCRIPTION = """Terminate the interaction when the request is met OR if the assistant cannot proceed further with the task.
-When you have finished all the tasks, call this tool to end the work."""
+When you have finished all the tasks, call this tool to end the work.
+IMPORTANT：Synthesize and summarize the acquired information to filter out irrelevant information."""
 
 
 class Terminate(BaseTool):
@@ -11,14 +12,14 @@ class Terminate(BaseTool):
     parameters: dict = {
         "type": "object",
         "properties": {
-            "result": {
+            "info": {
                 "type": "string",
-                "description": "key result of the tasks",
+                "description": "Summary result information of the current task, such as user response information, refined search results, etc.",
             }
         },
-        "required": ["result"],
+        "required": ["info"],
     }
 
-    async def execute(self, result: str) -> str:
+    async def execute(self, info: str) -> str:
         """Finish the current execution"""
-        return result
+        return info

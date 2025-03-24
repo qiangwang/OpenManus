@@ -15,7 +15,7 @@ from app.tool.base import BaseTool, ToolResult
 
 MAX_LENGTH = 2000
 
-_BROWSER_DESCRIPTION = """Use this tool to get text from links. 
+_BROWSER_DESCRIPTION = """
 Interact with a web browser to perform various actions such as navigation, element interaction,
 content extraction, and tab management. Supported actions include:
 - 'navigate': Go to a specific URL

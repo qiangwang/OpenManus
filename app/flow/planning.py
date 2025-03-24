@@ -108,7 +108,8 @@ class PlanningFlow(BaseFlow):
                 if hasattr(executor, "state") and executor.state == AgentState.FINISHED:
                     break
 
-            return await self._finalize_plan(all_step_result)
+            #return await self._finalize_plan(all_step_result)
+            return '任务完成'
         except Exception as e:
             logger.error(f"Error in PlanningFlow: {str(e)}")
             return f"Execution failed: {str(e)}"
