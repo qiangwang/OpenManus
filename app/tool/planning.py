@@ -19,33 +19,6 @@ class PlanningTool(BaseTool):
 
     name: str = "planning"
     description: str = _PLANNING_TOOL_DESCRIPTION
-    parameters1: dict = {
-        "type": "object",
-        "properties": {
-            "command": {
-                "description": "The command to execute",
-                "enum": [
-                    "create",
-                ],
-                "type": "string",
-            },
-            "plan_id": {
-                "description": "Unique identifier for the plan",
-                "type": "string",
-            },
-            "title": {
-                "description": "Title for the plan",
-                "type": "string",
-            },
-            "steps": {
-                "description": "List of plan steps, every step is a simple string",
-                "type": "array",
-                "items": {"type": "string"},
-            }
-        },
-        "required": ["command", "plan_id", "title", "steps"],
-        "additionalProperties": False,
-    }
     parameters: dict = {
         "type": "object",
         "properties": {

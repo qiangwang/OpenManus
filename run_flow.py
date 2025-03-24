@@ -22,6 +22,9 @@ async def run_flow():
             logger.warning("Empty prompt provided.")
             return
 
+        agent = agents['manus']()
+        prompt = await agent.run("请根据用户请求向用户提出疑问并收集个性化信息，最后生成一个完整、清晰的经过信息补全的用户请求，用户请求如下：\n%s" % prompt)
+
         flow = FlowFactory.create_flow(
             flow_type=FlowType.PLANNING,
             agents=agents,
@@ -37,6 +40,7 @@ async def run_flow():
             elapsed_time = time.time() - start_time
             logger.info(f"Request processed in {elapsed_time:.2f} seconds")
             logger.info(result)
+            time.sleep(3)
         except asyncio.TimeoutError:
             logger.error("Request processing timed out after 1 hour")
             logger.info(
